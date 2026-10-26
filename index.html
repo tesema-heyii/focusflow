@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <meta
+      name="description"
+      content="FocusFlow helps you organize tasks and focus on meaningful work."
+    />
+
+    <title>FocusFlow — Task Management</title>
+
+    <link rel="stylesheet" href="css/base.css" />
+    <link rel="stylesheet" href="css/layout.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container header-content">
+        <a class="brand" href="index.html" aria-label="FocusFlow home">
+          FocusFlow
+        </a>
+
+        <nav aria-label="Main navigation">
+          <a href="#dashboard">Dashboard</a>
+          <a href="#create-task">Add task</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="dashboard" class="container">
+      <section class="dashboard-intro" aria-labelledby="page-title">
+        <p class="eyebrow">YOUR PERSONAL WORKSPACE</p>
+
+        <h1 id="page-title">Make room for focused work.</h1>
+
+        <p class="intro-text">
+          Organize your tasks, clarify your priorities, and make steady progress
+          on what matters.
+        </p>
+      </section>
+
+      <div class="dashboard-grid">
+        <section
+          id="create-task"
+          class="panel task-form-panel"
+          aria-labelledby="create-task-title"
+        >
+          <div class="section-heading">
+            <h2 id="create-task-title">Create a task</h2>
+            <p>Define what needs to get done.</p>
+          </div>
+
+          <form action="#" method="get">
+            <div class="form-field">
+              <label for="task-title"> Task title (required) </label>
+              <input
+                type="text"
+                id="task-title"
+                name="title"
+                placeholder="e.g. Review communication systems"
+                maxlength="120"
+                required
+              />
+              <p class="field-help">
+                Use a short, clear description of the task.
+              </p>
+            </div>
+
+            <div class="form-field">
+              <label for="task-description">Description</label>
+              <textarea
+                id="task-description"
+                name="description"
+                rows="4"
+                maxlength="1000"
+                placeholder="Add details or the next action..."
+              ></textarea>
+            </div>
+
+            <div class="form-field">
+              <label for="task-category">Category</label>
+              <select id="task-category" name="category">
+                <option value="study">Study</option>
+                <option value="work">Work</option>
+                <option value="personal">Personal</option>
+                <option value="project">Project</option>
+              </select>
+            </div>
+
+            <div class="form-field">
+              <label for="task-priority">Priority</label>
+              <select id="task-priority" name="priority">
+                <option value="low">Low</option>
+                <option value="medium" selected>Medium</option>
+                <option value="high">High</option>
+              </select>
+            </div>
+
+            <div class="form-field">
+              <label for="task-deadline">Deadline</label>
+              <input type="date" id="task-deadline" name="deadline" />
+              <p class="field-help">
+                Optional. Choose a date if the task has a deadline.
+              </p>
+            </div>
+
+            <button type="submit" class="primary-button">Submit demo form</button>
+          </form>
+        </section>
+
+        <section
+          id="tasks"
+          class="panel task-list-panel"
+          aria-labelledby="tasks-title"
+        >
+          <div class="section-heading">
+            <h2 id="tasks-title">Your tasks</h2>
+            <p>Your task list will appear here.</p>
+          </div>
+
+          <div class="empty-state">
+            <h3>No tasks to display</h3>
+            <p>
+              Your tasks will appear here once task creation and storage are
+              implemented.
+            </p>
+            <a href="#create-task">Go to the task form</a>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container">
+        <p>FocusFlow — Build focus, one task at a time.</p>
+      </div>
+    </footer>
+  </body>
+</html>
