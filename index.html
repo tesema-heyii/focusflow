@@ -14,6 +14,7 @@
     <link rel="stylesheet" href="css/base.css" />
     <link rel="stylesheet" href="css/layout.css" />
   </head>
+
   <body>
     <header class="site-header">
       <div class="container header-content">
@@ -51,9 +52,10 @@
             <p>Define what needs to get done.</p>
           </div>
 
-          <form action="#" method="get">
+          <form id="task-form">
             <div class="form-field">
-              <label for="task-title"> Task title (required) </label>
+              <label for="task-title">Task title (required)</label>
+
               <input
                 type="text"
                 id="task-title"
@@ -62,6 +64,7 @@
                 maxlength="120"
                 required
               />
+
               <p class="field-help">
                 Use a short, clear description of the task.
               </p>
@@ -69,6 +72,7 @@
 
             <div class="form-field">
               <label for="task-description">Description</label>
+
               <textarea
                 id="task-description"
                 name="description"
@@ -80,6 +84,7 @@
 
             <div class="form-field">
               <label for="task-category">Category</label>
+
               <select id="task-category" name="category">
                 <option value="study">Study</option>
                 <option value="work">Work</option>
@@ -90,6 +95,7 @@
 
             <div class="form-field">
               <label for="task-priority">Priority</label>
+
               <select id="task-priority" name="priority">
                 <option value="low">Low</option>
                 <option value="medium" selected>Medium</option>
@@ -99,13 +105,17 @@
 
             <div class="form-field">
               <label for="task-deadline">Deadline</label>
+
               <input type="date" id="task-deadline" name="deadline" />
+
               <p class="field-help">
                 Optional. Choose a date if the task has a deadline.
               </p>
             </div>
 
-            <button type="submit" class="primary-button">Submit demo form</button>
+            <button type="submit" class="primary-button">Add task</button>
+
+            <p id="task-form-message" role="status" aria-live="polite"></p>
           </form>
         </section>
 
@@ -116,17 +126,68 @@
         >
           <div class="section-heading">
             <h2 id="tasks-title">Your tasks</h2>
-            <p>Your task list will appear here.</p>
+            <p>Manage your current tasks here.</p>
+          </div>
+
+          <div class="task-summary" aria-label="Task summary">
+            <div class="summary-card">
+              <h3>Total tasks</h3>
+              <p id="task-count-total">0</p>
+            </div>
+
+            <div class="summary-card">
+              <h3>Active</h3>
+              <p id="task-count-active">0</p>
+            </div>
+
+            <div class="summary-card">
+              <h3>Completed</h3>
+              <p id="task-count-completed">0</p>
+            </div>
+          </div>
+
+          <div
+            class="task-filters"
+            role="group"
+            aria-label="Filter tasks by status"
+          >
+            <button
+              type="button"
+              class="filter-button"
+              data-filter="all"
+              aria-pressed="true"
+            >
+              All
+            </button>
+
+            <button
+              type="button"
+              class="filter-button"
+              data-filter="active"
+              aria-pressed="false"
+            >
+              Active
+            </button>
+
+            <button
+              type="button"
+              class="filter-button"
+              data-filter="completed"
+              aria-pressed="false"
+            >
+              Completed
+            </button>
           </div>
 
           <div class="empty-state">
             <h3>No tasks to display</h3>
-            <p>
-              Your tasks will appear here once task creation and storage are
-              implemented.
-            </p>
+
+            <p>Your tasks will appear here once you create your first task.</p>
+
             <a href="#create-task">Go to the task form</a>
           </div>
+
+          <ul id="task-list" aria-label="Your tasks"></ul>
         </section>
       </div>
     </main>
@@ -136,5 +197,7 @@
         <p>FocusFlow — Build focus, one task at a time.</p>
       </div>
     </footer>
+
+    <script src="js/main.js"></script>
   </body>
 </html>
