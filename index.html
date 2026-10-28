@@ -113,7 +113,23 @@
               </p>
             </div>
 
-            <button type="submit" class="primary-button">Add task</button>
+            
+<button
+  type="submit"
+  id="task-submit-button"
+  class="primary-button"
+>
+  Add task
+</button>
+
+<button
+  type="button"
+  id="cancel-edit-button"
+  hidden
+>
+  Cancel Editing
+</button>
+
 
             <p id="task-form-message" role="status" aria-live="polite"></p>
           </form>
@@ -177,6 +193,28 @@
             >
               Completed
             </button>
+          </div>
+
+          <div class="task-tools">
+            <div class="form-field">
+              <label for="task-search">Search tasks</label>
+              <input
+                type="search"
+                id="task-search"
+                placeholder="Search titles or descriptions..."
+                autocomplete="off"
+              />
+            </div>
+
+            <div class="form-field">
+              <label for="task-sort">Sort tasks by</label>
+              <select id="task-sort">
+                <option value="newest">Newest first</option>
+                <option value="title">Title (A–Z)</option>
+                <option value="priority">Priority (High to Low)</option>
+                <option value="deadline">Deadline (Earliest first)</option>
+              </select>
+            </div>
           </div>
 
           <div class="empty-state">
