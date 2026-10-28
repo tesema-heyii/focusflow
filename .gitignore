@@ -15,3 +15,20 @@ coverage/
 .env
 .env.*
 !.env.example
+
+# Dependencies
+node_modules/
+
+# Environment variables and local secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+
+# Operating-system and editor files
+.DS_Store
+Thumbs.db
+.vscode/

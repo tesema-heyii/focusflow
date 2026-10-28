@@ -13,11 +13,29 @@
 
     <link rel="stylesheet" href="css/base.css" />
     <link rel="stylesheet" href="css/layout.css" />
+
+    <script src="js/main.js" defer></script>
   </head>
 
   <body>
     <header class="site-header">
       <div class="container header-content">
+        <button
+          type="button"
+          class="theme-toggle"
+          id="theme-toggle"
+          aria-label="Switch to dark theme"
+          aria-pressed="false"
+        >
+          <span
+            class="theme-toggle-icon"
+            id="theme-toggle-icon"
+            aria-hidden="true"
+            >☾</span
+          >
+          <span id="theme-toggle-label">Dark mode</span>
+        </button>
+
         <a class="brand" href="index.html" aria-label="FocusFlow home">
           FocusFlow
         </a>
@@ -113,23 +131,17 @@
               </p>
             </div>
 
-            
-<button
-  type="submit"
-  id="task-submit-button"
-  class="primary-button"
->
-  Add task
-</button>
+            <button
+              type="submit"
+              id="task-submit-button"
+              class="primary-button"
+            >
+              Add task
+            </button>
 
-<button
-  type="button"
-  id="cancel-edit-button"
-  hidden
->
-  Cancel Editing
-</button>
-
+            <button type="button" id="cancel-edit-button" hidden>
+              Cancel editing
+            </button>
 
             <p id="task-form-message" role="status" aria-live="polite"></p>
           </form>
@@ -198,16 +210,18 @@
           <div class="task-tools">
             <div class="form-field">
               <label for="task-search">Search tasks</label>
+
               <input
                 type="search"
                 id="task-search"
-                placeholder="Search titles or descriptions..."
+                placeholder="Search tasks..."
                 autocomplete="off"
               />
             </div>
 
             <div class="form-field">
               <label for="task-sort">Sort tasks by</label>
+
               <select id="task-sort">
                 <option value="newest">Newest first</option>
                 <option value="title">Title (A–Z)</option>
@@ -235,7 +249,5 @@
         <p>FocusFlow — Build focus, one task at a time.</p>
       </div>
     </footer>
-
-    <script src="js/main.js"></script>
   </body>
 </html>

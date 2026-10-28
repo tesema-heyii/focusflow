@@ -1,92 +1,219 @@
-/*
- * ============================================================
- * FocusFlow — Task Management Application
- * ============================================================
- *
- * Current scope:
- * - Create, edit, complete, and delete tasks.
- * - Validate and normalize task titles and descriptions.
- * - Persist tasks using localStorage.
- * - Recover gracefully from invalid stored data.
- * - Search, filter, and sort tasks.
- * - Display task summary counts.
- * - Restore in-memory data if a persistence operation fails.
- *
- * Dependencies:
- * - index.html with the element IDs referenced below.
- * - No external libraries or frameworks.
- *
- * Current validation scope:
- * - Reject empty or whitespace-only titles.
- * - Trim leading and trailing whitespace from titles
- *   and descriptions.
- *
- * Future scope:
- * - Validate category, priority, and deadline values.
- * ============================================================
- */
+"use strict";
 
 /* ============================================================
    1. DOM REFERENCES
    ============================================================ */
 
-// Task form and editing controls.
 const taskForm = document.querySelector("#task-form");
 const taskSubmitButton = document.querySelector("#task-submit-button");
 const cancelEditButton = document.querySelector("#cancel-edit-button");
 
-// Task form fields.
 const taskTitleInput = document.querySelector("#task-title");
 const taskDescriptionInput = document.querySelector("#task-description");
 const taskCategoryInput = document.querySelector("#task-category");
 const taskPriorityInput = document.querySelector("#task-priority");
 const taskDeadlineInput = document.querySelector("#task-deadline");
 
-// Task list and feedback.
 const taskList = document.querySelector("#task-list");
 const emptyState = document.querySelector(".empty-state");
 const formMessage = document.querySelector("#task-form-message");
 
-// Summary counters.
 const totalTaskCount = document.querySelector("#task-count-total");
 const activeTaskCount = document.querySelector("#task-count-active");
 const completedTaskCount = document.querySelector("#task-count-completed");
 
-// Search, filtering, and sorting controls.
 const filterButtons = document.querySelectorAll(".filter-button");
 const taskSearchInput = document.querySelector("#task-search");
 const taskSortSelect = document.querySelector("#task-sort");
 
 /* ============================================================
-   2. APPLICATION STATE
+   2. CONSTANTS AND APPLICATION STATE
    ============================================================ */
 
 const STORAGE_KEY = "focusflow.tasks";
 
-// The currently selected status filter.
-let currentFilter = "all";
+const CATEGORIES = ["study", "work", "personal", "project"];
+const PRIORITIES = ["low", "medium", "high"];
 
-// The ID of the task being edited, or null when creating a task.
+const PRIORITY_RANK = {
+  high: 3,
+  medium: 2,
+  low: 1,
+};
+
+let tasks = [];
+let nextTaskId = 1;
+let currentFilter = "all";
 let editingTaskId = null;
 
 /* ============================================================
-   3. FORM MODE MANAGEMENT
+   3. VALIDATION
    ============================================================ */
 
-/**
- * Synchronizes the form controls with the current editing mode.
- *
- * @param {boolean} isEditing - Whether an existing task is edited.
- */
+function validateTaskFields({
+  title,
+  description,
+  category,
+  priority,
+  deadline,
+}) {
+  if (title.trim() === "") {
+    return "Please enter a task title.";
+  }
+
+  if (title.trim().length > 120) {
+    return "The title cannot exceed 120 characters.";
+  }
+
+  if (description.trim().length > 1000) {
+    return "The description cannot exceed 1,000 characters.";
+  }
+
+  if (!CATEGORIES.includes(category)) {
+    return "Please select a valid category.";
+  }
+
+  if (!PRIORITIES.includes(priority)) {
+    return "Please select a valid priority.";
+  }
+
+  if (deadline !== "") {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(deadline)) {
+      return "Please enter a valid deadline.";
+    }
+
+    const [year, month, day] = deadline.split("-").map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day));
+
+    const validDate =
+      date.getUTCFullYear() === year &&
+      date.getUTCMonth() === month - 1 &&
+      date.getUTCDate() === day;
+
+    if (!validDate) {
+      return "Please enter a real calendar date.";
+    }
+  }
+
+  return null;
+}
+
+/* ============================================================
+   4. LOAD AND SAVE TASKS
+   ============================================================ */
+
+function loadTasks() {
+  try {
+    const storedData = localStorage.getItem(STORAGE_KEY);
+
+    if (storedData === null) {
+      return [];
+    }
+
+    const parsedData = JSON.parse(storedData);
+
+    if (!Array.isArray(parsedData)) {
+      console.error("Saved task data is not an array.");
+      return [];
+    }
+
+    const validTasks = [];
+    const usedIds = new Set();
+
+    for (const item of parsedData) {
+      if (
+        item === null ||
+        typeof item !== "object" ||
+        !Number.isSafeInteger(item.id) ||
+        item.id <= 0 ||
+        usedIds.has(item.id) ||
+        typeof item.title !== "string"
+      ) {
+        continue;
+      }
+
+      const task = {
+        id: item.id,
+        title: item.title.trim(),
+        description:
+          typeof item.description === "string" ? item.description.trim() : "",
+        category: CATEGORIES.includes(item.category)
+          ? item.category
+          : "personal",
+        priority: PRIORITIES.includes(item.priority) ? item.priority : "medium",
+        deadline: typeof item.deadline === "string" ? item.deadline : "",
+        completed: item.completed === true,
+      };
+
+      // Ignore records that exceed the supported text limits.
+      if (
+        task.title === "" ||
+        task.title.length > 120 ||
+        task.description.length > 1000
+      ) {
+        continue;
+      }
+
+      // Repair an invalid deadline rather than losing the task.
+      if (task.deadline !== "" && validateTaskFields(task) !== null) {
+        task.deadline = "";
+      }
+
+      if (validateTaskFields(task) !== null) {
+        continue;
+      }
+
+      validTasks.push(task);
+      usedIds.add(task.id);
+    }
+
+    return validTasks;
+  } catch (error) {
+    console.error("Could not load saved tasks:", error);
+    return [];
+  }
+}
+
+function saveTasks() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+    return true;
+  } catch (error) {
+    console.error("Could not save tasks:", error);
+    return false;
+  }
+}
+
+function createTaskSnapshot() {
+  return tasks.map((task) => ({ ...task }));
+}
+
+function persistOrRollback(previousTasks, previousNextTaskId) {
+  if (saveTasks()) {
+    return true;
+  }
+
+  tasks = previousTasks;
+  nextTaskId = previousNextTaskId;
+
+  renderTasks();
+
+  formMessage.textContent =
+    "Could not save changes. Your previous tasks were restored.";
+
+  return false;
+}
+
+/* ============================================================
+   5. FORM MODE
+   ============================================================ */
+
 function setEditingMode(isEditing) {
-  taskSubmitButton.textContent = isEditing ? "Save Changes" : "Add task";
+  taskSubmitButton.textContent = isEditing ? "Save changes" : "Add task";
 
   cancelEditButton.hidden = !isEditing;
 }
 
-/**
- * Clears the form and exits editing mode.
- */
 function resetTaskForm() {
   editingTaskId = null;
   taskForm.reset();
@@ -94,218 +221,150 @@ function resetTaskForm() {
 }
 
 /* ============================================================
-   4. PERSISTENCE
+   6. FILTERING, SEARCH, AND SORTING
    ============================================================ */
 
-/**
- * Loads tasks from localStorage.
- *
- * Invalid JSON, an unexpected data structure, or invalid records
- * are handled without crashing the application.
- *
- * @returns {Array<Object>} The valid tasks that were recovered.
- */
-function loadTasks() {
-  try {
-    const savedTasks = localStorage.getItem(STORAGE_KEY);
-
-    if (savedTasks === null) {
-      return [];
-    }
-
-    const parsedTasks = JSON.parse(savedTasks);
-
-    if (!Array.isArray(parsedTasks)) {
-      console.error("FocusFlow storage does not contain a task array.");
-
-      return [];
-    }
-
-    return parsedTasks
-      .filter(function (task) {
-        return (
-          task !== null &&
-          typeof task === "object" &&
-          Number.isSafeInteger(task.id) &&
-          task.id > 0 &&
-          typeof task.title === "string"
-        );
-      })
-      .map(function (task) {
-        return {
-          id: task.id,
-          title: task.title,
-          description:
-            typeof task.description === "string" ? task.description : "",
-          category:
-            typeof task.category === "string" ? task.category : "personal",
-          priority:
-            typeof task.priority === "string" ? task.priority : "medium",
-          deadline: typeof task.deadline === "string" ? task.deadline : "",
-          completed: task.completed === true,
-        };
-      });
-  } catch (error) {
-    console.error("Could not load FocusFlow tasks:", error);
-
-    return [];
-  }
-}
-
-/**
- * Saves the current task array to localStorage.
- *
- * @returns {boolean} True if persistence succeeded.
- */
-function saveTasks() {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
-
-    return true;
-  } catch (error) {
-    console.error("Could not save FocusFlow tasks:", error);
-
-    return false;
-  }
-}
-
-/**
- * Creates a shallow copy of every task object.
- *
- * Current task properties are primitive values, so shallow
- * copies are sufficient to restore the previous task state.
- *
- * @returns {Array<Object>} A snapshot of the current tasks.
- */
-function createTaskSnapshot() {
-  return tasks.map(function (task) {
-    return { ...task };
-  });
-}
-
-// Load persisted tasks when the application starts.
-let tasks = loadTasks();
-
-// Generate the next ID without reusing an existing ID.
-let nextTaskId =
-  tasks.reduce(function (largestId, task) {
-    return Math.max(largestId, task.id);
-  }, 0) + 1;
-
-/* ============================================================
-   5. TASK SUMMARY COUNTS
-   ============================================================ */
-
-/**
- * Updates the total, active, and completed task counters.
- */
-function updateTaskCounts() {
-  const total = tasks.length;
-
-  const completed = tasks.filter(function (task) {
-    return task.completed;
-  }).length;
-
-  const active = total - completed;
-
-  totalTaskCount.textContent = String(total);
-  activeTaskCount.textContent = String(active);
-  completedTaskCount.textContent = String(completed);
-}
-
-/* ============================================================
-   6. SEARCH, FILTERING, AND SORTING
-   ============================================================ */
-
-/**
- * Returns tasks matching the selected filter and search query,
- * sorted according to the current sorting option.
- *
- * The original tasks array is never sorted directly.
- *
- * @returns {Array<Object>} The visible tasks.
- */
 function getVisibleTasks() {
-  // Step 1: Apply the selected status filter.
-  let visibleTasks = tasks.filter(function (task) {
-    if (currentFilter === "active") {
-      return !task.completed;
-    }
-
-    if (currentFilter === "completed") {
-      return task.completed;
-    }
-
-    return true;
-  });
-
-  // Step 2: Search task titles and descriptions.
   const query = taskSearchInput.value.trim().toLowerCase();
 
-  if (query !== "") {
-    visibleTasks = visibleTasks.filter(function (task) {
-      return (
-        task.title.toLowerCase().includes(query) ||
-        task.description.toLowerCase().includes(query)
+  let result = tasks.filter((task) => {
+    if (currentFilter === "active" && task.completed) {
+      return false;
+    }
+
+    if (currentFilter === "completed" && !task.completed) {
+      return false;
+    }
+
+    const searchableText = [
+      task.title,
+      task.description,
+      task.category,
+      task.priority,
+    ]
+      .join(" ")
+      .toLowerCase();
+
+    return searchableText.includes(query);
+  });
+
+  result = [...result];
+
+  switch (taskSortSelect.value) {
+    case "title":
+      result.sort((a, b) => a.title.localeCompare(b.title));
+      break;
+
+    case "priority":
+      result.sort(
+        (a, b) => PRIORITY_RANK[b.priority] - PRIORITY_RANK[a.priority],
       );
-    });
+      break;
+
+    case "deadline":
+      result.sort((a, b) => {
+        if (!a.deadline && !b.deadline) return 0;
+        if (!a.deadline) return 1;
+        if (!b.deadline) return -1;
+
+        return a.deadline.localeCompare(b.deadline);
+      });
+      break;
+
+    case "newest":
+    default:
+      result.sort((a, b) => b.id - a.id);
+      break;
   }
 
-  // Step 3: Copy the array before sorting.
-  visibleTasks = [...visibleTasks];
-
-  // Define the relative rank of each priority.
-  const priorityRank = {
-    high: 3,
-    medium: 2,
-    low: 1,
-  };
-
-  // Step 4: Apply the selected sorting option.
-  if (taskSortSelect.value === "title") {
-    visibleTasks.sort(function (a, b) {
-      return a.title.localeCompare(b.title);
-    });
-  } else if (taskSortSelect.value === "priority") {
-    visibleTasks.sort(function (a, b) {
-      return (priorityRank[b.priority] ?? 0) - (priorityRank[a.priority] ?? 0);
-    });
-  } else if (taskSortSelect.value === "deadline") {
-    visibleTasks.sort(function (a, b) {
-      // Tasks without deadlines appear after dated tasks.
-      if (!a.deadline && !b.deadline) return 0;
-      if (!a.deadline) return 1;
-      if (!b.deadline) return -1;
-
-      // ISO-formatted date strings can be compared directly.
-      return a.deadline.localeCompare(b.deadline);
-    });
-  } else {
-    // Default: newest tasks first.
-    visibleTasks.sort(function (a, b) {
-      return b.id - a.id;
-    });
-  }
-
-  return visibleTasks;
+  return result;
 }
 
+
+
+
+
 /* ============================================================
-   7. TASK RENDERING
+   DEADLINE AWARENESS
    ============================================================ */
 
-/**
- * Creates a task action button.
- *
- * @param {string} label - The visible button label.
- * @param {string} action - The delegated action identifier.
- * @param {number} taskId - The associated task ID.
- * @returns {HTMLButtonElement} The created button.
- */
-function createTaskButton(label, action, taskId) {
+// Return today's date in local YYYY-MM-DD format.
+// Avoids UTC/time-zone errors when comparing date-only deadlines.
+function getTodayDateString() {
+  const now = new Date();
+
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+// Calculate the number of calendar days between two date strings.
+function getDaysUntilDeadline(deadline) {
+  const today = getTodayDateString();
+
+  const [todayYear, todayMonth, todayDay] = today.split("-").map(Number);
+  const [dueYear, dueMonth, dueDay] = deadline.split("-").map(Number);
+
+  const todayUtc = Date.UTC(todayYear, todayMonth - 1, todayDay);
+  const deadlineUtc = Date.UTC(dueYear, dueMonth - 1, dueDay);
+
+  return Math.round((deadlineUtc - todayUtc) / 86400000);
+}
+
+// Return a deadline label and CSS class for relevant tasks.
+function getDeadlineStatus(task) {
+  // Completed tasks should never display an overdue warning.
+  if (task.completed || !task.deadline) {
+    return null;
+  }
+
+  const daysRemaining = getDaysUntilDeadline(task.deadline);
+
+  if (daysRemaining < 0) {
+    return {
+      label: "Overdue",
+      className: "deadline-badge--overdue",
+    };
+  }
+
+  if (daysRemaining === 0) {
+    return {
+      label: "Due today",
+      className: "deadline-badge--today",
+    };
+  }
+
+  if (daysRemaining === 1) {
+    return {
+      label: "Due tomorrow",
+      className: "deadline-badge--tomorrow",
+    };
+  }
+
+  if (daysRemaining <= 7) {
+    return {
+      label: "Upcoming",
+      className: "deadline-badge--upcoming",
+    };
+  }
+
+  return null;
+}
+
+
+
+
+/* ============================================================
+   7. TASK ELEMENT CREATION
+   ============================================================ */
+
+function createActionButton(label, action, taskId) {
   const button = document.createElement("button");
 
   button.type = "button";
+  button.className = `task-action-button ${action}-button`;
   button.dataset.action = action;
   button.dataset.taskId = String(taskId);
   button.textContent = label;
@@ -313,187 +372,221 @@ function createTaskButton(label, action, taskId) {
   return button;
 }
 
-/**
- * Renders visible tasks and refreshes the summary counters.
- */
-function renderTasks() {
-  // Remove the previously rendered task elements.
-  taskList.replaceChildren();
+function createTaskElement(task) {
+  const item = document.createElement("li");
+  item.className = "task-item";
+  item.dataset.taskId = String(task.id);
 
-  const visibleTasks = getVisibleTasks();
-
-  for (const task of visibleTasks) {
-    const taskItem = document.createElement("li");
-
-    taskItem.classList.toggle("is-completed", task.completed);
-
-    // Task title.
-    const title = document.createElement("h3");
-    title.textContent = task.title;
-
-    taskItem.append(title);
-
-    // Category, priority, and optional deadline.
-    const details = document.createElement("p");
-
-    details.textContent = `${task.category} · ${task.priority} priority`;
-
-    if (task.deadline) {
-      details.textContent += ` · Due: ${task.deadline}`;
-    }
-
-    taskItem.append(details);
-
-    // Optional description.
-    if (task.description) {
-      const description = document.createElement("p");
-
-      description.textContent = task.description;
-
-      taskItem.append(description);
-    }
-
-    // Completion status.
-    const status = document.createElement("p");
-
-    status.textContent = task.completed ? "Completed" : "Not completed";
-
-    taskItem.append(status);
-
-    // Completion control.
-    const completeButton = createTaskButton(
-      task.completed ? "Mark as not completed" : "Mark as completed",
-      "toggle-complete",
-      task.id,
-    );
-
-    taskItem.append(completeButton);
-
-    // Editing control.
-    const editButton = createTaskButton("Edit", "edit", task.id);
-
-    taskItem.append(editButton);
-
-    // Deletion control.
-    const deleteButton = createTaskButton("Delete", "delete", task.id);
-
-    taskItem.append(deleteButton);
-
-    taskList.append(taskItem);
+  if (task.completed) {
+    item.classList.add("is-completed");
   }
 
-  // Show the empty state when no tasks match the current view.
+  const content = document.createElement("div");
+  content.className = "task-content";
+
+  const title = document.createElement("h3");
+  title.className = "task-title";
+  title.textContent = task.title;
+
+  content.append(title);
+
+  if (task.description) {
+    const description = document.createElement("p");
+    description.className = "task-description";
+    description.textContent = task.description;
+    content.append(description);
+  }
+
+
+
+
+
+
+  
+  const metadata = document.createElement("p");
+  metadata.className = "task-metadata";
+  metadata.append(
+    document.createTextNode(`${task.category} · ${task.priority} priority`),
+  );
+
+  if (task.deadline) {
+    metadata.append(document.createTextNode(` · Due: ${task.deadline}`));
+  }
+
+  const deadlineStatus = getDeadlineStatus(task);
+
+  if (deadlineStatus) {
+    const badge = document.createElement("span");
+
+    badge.className = `deadline-badge ${deadlineStatus.className}`;
+    badge.textContent = deadlineStatus.label;
+    badge.setAttribute(
+      "aria-label",
+      `Deadline status: ${deadlineStatus.label}`,
+    );
+
+    metadata.append(document.createTextNode(" "));
+    metadata.append(badge);
+  }
+
+  content.append(metadata);
+
+
+
+
+
+
+
+
+  const status = document.createElement("p");
+  status.className = "task-status";
+  status.textContent = task.completed ? "Completed" : "Active";
+
+  content.append(status);
+
+  const actions = document.createElement("div");
+  actions.className = "task-actions";
+
+  actions.append(
+    createActionButton(
+      task.completed ? "Mark active" : "Complete",
+      "toggle-complete",
+      task.id,
+    ),
+    createActionButton("Edit", "edit", task.id),
+    createActionButton("Delete", "delete", task.id),
+  );
+
+  item.append(content, actions);
+
+  return item;
+}
+
+/* ============================================================
+   8. RENDER TASKS AND COUNTERS
+   ============================================================ */
+
+function updateTaskCounts() {
+  const completed = tasks.filter((task) => task.completed).length;
+
+  totalTaskCount.textContent = String(tasks.length);
+  activeTaskCount.textContent = String(tasks.length - completed);
+  completedTaskCount.textContent = String(completed);
+}
+
+function renderTasks() {
+  const visibleTasks = getVisibleTasks();
+  const fragment = document.createDocumentFragment();
+
+  for (const task of visibleTasks) {
+    fragment.append(createTaskElement(task));
+  }
+
+  taskList.replaceChildren(fragment);
+
+  // The empty message disappears as soon as visible tasks exist.
   emptyState.hidden = visibleTasks.length > 0;
 
-  // Summary counts always reflect all tasks, not just visible ones.
+  if (visibleTasks.length === 0) {
+    const heading = emptyState.querySelector("h3");
+    const paragraph = emptyState.querySelector("p");
+
+    if (taskSearchInput.value.trim() !== "") {
+      heading.textContent = "No matching tasks";
+      paragraph.textContent = "Try a different search term.";
+    } else if (currentFilter === "active") {
+      heading.textContent = "No active tasks";
+      paragraph.textContent = "All your tasks are completed.";
+    } else if (currentFilter === "completed") {
+      heading.textContent = "No completed tasks";
+      paragraph.textContent = "Completed tasks will appear here.";
+    } else {
+      heading.textContent = "No tasks to display";
+      paragraph.textContent =
+        "Your tasks will appear here once you create your first task.";
+    }
+  }
+
   updateTaskCounts();
 }
 
 /* ============================================================
-   8. CREATE AND EDIT TASKS
+   9. ADD AND EDIT TASKS
    ============================================================ */
 
-taskForm.addEventListener("submit", function (event) {
+taskForm.addEventListener("submit", (event) => {
   event.preventDefault();
 
-  // Normalize the title and reject blank input.
   const title = taskTitleInput.value.trim();
+  const description = taskDescriptionInput.value.trim();
+  const category = taskCategoryInput.value;
+  const priority = taskPriorityInput.value;
+  const deadline = taskDeadlineInput.value;
 
-  if (title === "") {
-    formMessage.textContent = "Please enter a task title.";
+  const validationError = validateTaskFields({
+    title,
+    description,
+    category,
+    priority,
+    deadline,
+  });
 
-    taskTitleInput.focus();
-
+  if (validationError !== null) {
+    formMessage.textContent = validationError;
     return;
   }
 
-  // Capture the previous state in case persistence fails.
   const previousTasks = createTaskSnapshot();
   const previousNextTaskId = nextTaskId;
 
   let successMessage;
 
   if (editingTaskId !== null) {
-    // EDIT MODE: find the existing task.
-    const existingTask = tasks.find(function (task) {
-      return task.id === editingTaskId;
-    });
+    const task = tasks.find((item) => item.id === editingTaskId);
 
-    if (!existingTask) {
-      editingTaskId = null;
-      setEditingMode(false);
-
-      formMessage.textContent =
-        "This task no longer exists. Please select a task to edit again.";
-
+    if (!task) {
+      resetTaskForm();
+      formMessage.textContent = "This task no longer exists. Please try again.";
       return;
     }
 
-    // Update editable fields while preserving the task ID
-    // and its current completion status.
-    existingTask.title = title;
-    existingTask.description = taskDescriptionInput.value.trim();
-    existingTask.category = taskCategoryInput.value;
-    existingTask.priority = taskPriorityInput.value;
-    existingTask.deadline = taskDeadlineInput.value;
+    task.title = title;
+    task.description = description;
+    task.category = category;
+    task.priority = priority;
+    task.deadline = deadline;
 
     successMessage = "Task updated successfully.";
   } else {
-    // CREATE MODE: construct a new task.
-    const task = {
+    tasks.push({
       id: nextTaskId,
-      title: title,
-      description: taskDescriptionInput.value.trim(),
-      category: taskCategoryInput.value,
-      priority: taskPriorityInput.value,
-      deadline: taskDeadlineInput.value,
+      title,
+      description,
+      category,
+      priority,
+      deadline,
       completed: false,
-    };
-
-    tasks.push(task);
+    });
 
     nextTaskId += 1;
-
     successMessage = "Task added successfully.";
   }
 
-  // Attempt to persist the changes.
-  const saved = saveTasks();
-
-  if (!saved) {
-    // Restore the previous state if persistence fails.
-    tasks = previousTasks;
-    nextTaskId = previousNextTaskId;
-
-    renderTasks();
-
-    formMessage.textContent =
-      "Changes could not be saved. Your previous task data has been restored.";
-
+  if (!persistOrRollback(previousTasks, previousNextTaskId)) {
     return;
   }
 
-  // Exit editing mode only after a successful save.
   resetTaskForm();
-
   renderTasks();
 
   formMessage.textContent = successMessage;
 });
 
 /* ============================================================
-   9. TASK LIST ACTIONS
+   10. COMPLETE, EDIT, AND DELETE TASKS
    ============================================================ */
 
-/*
- * Event delegation allows one listener to handle the Edit,
- * completion, and Delete buttons for every rendered task.
- *
- * This remains effective when renderTasks() rebuilds the list.
- */
-
-taskList.addEventListener("click", function (event) {
-  // Ignore events that do not originate from an element.
+taskList.addEventListener("click", (event) => {
   if (!(event.target instanceof Element)) {
     return;
   }
@@ -507,20 +600,15 @@ taskList.addEventListener("click", function (event) {
   const taskId = Number(button.dataset.taskId);
   const action = button.dataset.action;
 
-  // EDIT: load the selected task into the form.
-  // Editing does not modify or persist the task yet.
+  const task = tasks.find((item) => item.id === taskId);
+
+  if (!task) {
+    return;
+  }
+
+  // Editing only fills the form; it does not save changes yet.
   if (action === "edit") {
-    const task = tasks.find(function (item) {
-      return item.id === taskId;
-    });
-
-    if (!task) {
-      return;
-    }
-
     editingTaskId = task.id;
-
-    setEditingMode(true);
 
     taskTitleInput.value = task.title;
     taskDescriptionInput.value = task.description;
@@ -528,97 +616,60 @@ taskList.addEventListener("click", function (event) {
     taskPriorityInput.value = task.priority;
     taskDeadlineInput.value = task.deadline;
 
-    formMessage.textContent = "Editing task: " + task.title;
+    setEditingMode(true);
 
+    formMessage.textContent = `Editing task: ${task.title}`;
     taskTitleInput.focus();
 
     return;
   }
 
-  // Ignore unsupported actions.
   if (action !== "toggle-complete" && action !== "delete") {
     return;
   }
 
-  // Preserve the previous data before modifying it.
   const previousTasks = createTaskSnapshot();
+  const previousNextTaskId = nextTaskId;
 
   if (action === "toggle-complete") {
-    const task = tasks.find(function (item) {
-      return item.id === taskId;
-    });
-
-    if (!task) {
-      return;
-    }
-
     task.completed = !task.completed;
+  } else {
+    tasks = tasks.filter((item) => item.id !== taskId);
   }
 
-  if (action === "delete") {
-    const taskExists = tasks.some(function (item) {
-      return item.id === taskId;
-    });
-
-    if (!taskExists) {
-      return;
-    }
-
-    tasks = tasks.filter(function (item) {
-      return item.id !== taskId;
-    });
-  }
-
-  // Persist the completion or deletion change.
-  const saved = saveTasks();
-
-  if (!saved) {
-    // Roll back if the change could not be persisted.
-    tasks = previousTasks;
-
-    renderTasks();
-
-    formMessage.textContent =
-      "Changes could not be saved. Your previous task data has been restored.";
-
+  if (!persistOrRollback(previousTasks, previousNextTaskId)) {
     return;
   }
 
-  // If the task currently being edited was deleted,
-  // clear the form only after deletion succeeds.
   if (action === "delete" && editingTaskId === taskId) {
     resetTaskForm();
-
-    formMessage.textContent = "Editing cancelled because the task was deleted.";
-  } else if (action === "delete") {
-    formMessage.textContent = "Task deleted successfully.";
-  } else {
-    formMessage.textContent = "Task status updated.";
   }
 
   renderTasks();
+
+  formMessage.textContent =
+    action === "delete" ? "Task deleted successfully." : "Task status updated.";
 });
 
 /* ============================================================
-   10. STATUS FILTERS
+   11. STATUS FILTERS
    ============================================================ */
 
-filterButtons.forEach(function (button) {
-  button.addEventListener("click", function () {
-    const selectedFilter = button.dataset.filter;
+filterButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    const filter = button.dataset.filter;
 
-    // Accept only the supported filter values.
-    if (!["all", "active", "completed"].includes(selectedFilter)) {
+    if (!["all", "active", "completed"].includes(filter)) {
       return;
     }
 
-    currentFilter = selectedFilter;
+    currentFilter = filter;
 
-    // Keep accessible pressed states synchronized.
-    filterButtons.forEach(function (filterButton) {
-      const isSelected = filterButton.dataset.filter === currentFilter;
-
-      filterButton.setAttribute("aria-pressed", String(isSelected));
+    filterButtons.forEach((item) => {
+      item.setAttribute(
+        "aria-pressed",
+        String(item.dataset.filter === currentFilter),
+      );
     });
 
     renderTasks();
@@ -626,31 +677,18 @@ filterButtons.forEach(function (button) {
 });
 
 /* ============================================================
-   11. SEARCH
+   12. SEARCH AND SORT
    ============================================================ */
 
-// Register the search listener once.
-taskSearchInput.addEventListener("input", function () {
-  renderTasks();
-});
-
-/* ============================================================
-   12. SORTING
-   ============================================================ */
-
-// Register the sorting listener once.
-taskSortSelect.addEventListener("change", function () {
-  renderTasks();
-});
+taskSearchInput.addEventListener("input", renderTasks);
+taskSortSelect.addEventListener("change", renderTasks);
 
 /* ============================================================
    13. CANCEL EDITING
    ============================================================ */
 
-cancelEditButton.addEventListener("click", function () {
-  // Discard unsaved form changes without modifying the task.
+cancelEditButton.addEventListener("click", () => {
   resetTaskForm();
-
   formMessage.textContent = "Editing cancelled.";
 });
 
@@ -658,16 +696,92 @@ cancelEditButton.addEventListener("click", function () {
    14. INITIALIZATION
    ============================================================ */
 
-// Render saved tasks and initialize the summary counters.
-renderTasks();
+try {
+  tasks = loadTasks();
 
-// Initialize the form's default state.
-setEditingMode(false);
+  nextTaskId = tasks.reduce((maxId, task) => Math.max(maxId, task.id), 0) + 1;
 
-// Initialize accessible filter states.
-filterButtons.forEach(function (button) {
-  button.setAttribute(
-    "aria-pressed",
-    String(button.dataset.filter === currentFilter),
-  );
-});
+  renderTasks();
+  setEditingMode(false);
+} catch (error) {
+  console.error("FocusFlow could not initialize:", error);
+
+  formMessage.textContent =
+    "FocusFlow could not initialize correctly. Check the browser console.";
+}
+
+
+
+
+/* =========================================
+   FocusFlow — Light and dark theme switcher
+   Add this block at the end of js/main.js
+   ========================================= */
+
+(() => {
+  "use strict";
+
+  const THEME_STORAGE_KEY = "focusflow.theme";
+
+  const themeToggle = document.querySelector("#theme-toggle");
+  const themeIcon = document.querySelector("#theme-toggle-icon");
+  const themeLabel = document.querySelector("#theme-toggle-label");
+
+  // If the theme button is absent, do not interfere with task management.
+  if (!themeToggle || !themeIcon || !themeLabel) {
+    return;
+  }
+
+  function readSavedTheme() {
+    try {
+      const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+
+      if (savedTheme === "light" || savedTheme === "dark") {
+        return savedTheme;
+      }
+    } catch (error) {
+      console.warn("FocusFlow could not read the saved theme.", error);
+    }
+
+    return "light";
+  }
+
+  function applyTheme(theme) {
+    const selectedTheme = theme === "dark" ? "dark" : "light";
+    const isDark = selectedTheme === "dark";
+
+    document.documentElement.dataset.theme = selectedTheme;
+
+    themeIcon.textContent = isDark ? "☀" : "☾";
+    themeLabel.textContent = isDark ? "Light mode" : "Dark mode";
+
+    themeToggle.setAttribute(
+      "aria-label",
+      isDark ? "Switch to light theme" : "Switch to dark theme"
+    );
+
+    themeToggle.setAttribute("aria-pressed", String(isDark));
+  }
+
+  function saveTheme(theme) {
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, theme);
+    } catch (error) {
+      console.warn("FocusFlow could not save the theme preference.", error);
+    }
+  }
+
+  // Restore the saved theme when the page loads.
+  applyTheme(readSavedTheme());
+
+  // Switch themes when the user clicks the button.
+  themeToggle.addEventListener("click", () => {
+    const currentTheme =
+      document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+
+    const nextTheme = currentTheme === "dark" ? "light" : "dark";
+
+    applyTheme(nextTheme);
+    saveTheme(nextTheme);
+  });
+})();
